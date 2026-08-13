@@ -413,14 +413,14 @@
                 e.preventDefault();
                 setAdminLoginError('');
                 
-                if (adminPassword === 'admin' || adminPassword === '1234') {
+                if (adminPassword === 'Pack' || adminPassword === 'Pack') {
                     setIsAdmin(true);
                     setShowAdminLogin(false);
                     setAdminPassword('');
                     setAdminLoginError('');
                     showToast('เข้าสู่ระบบสำหรับ Admin เรียบร้อยแล้ว');
                 } else {
-                    setAdminLoginError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง (รหัสผ่านเริ่มต้น: admin)');
+                    setAdminLoginError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
                 }
             };
 
@@ -1036,7 +1036,7 @@
                                         <label className="block text-xs font-medium text-slate-700 mb-1">รหัสผ่านสำหรับ Admin</label>
                                         <input 
                                             type="password"
-                                            placeholder="ใส่รหัสผ่าน (ทดสอบใช้: admin)"
+                                            placeholder="ใส่รหัสผ่าน..."
                                             value={adminPassword}
                                             onChange={(e) => {
                                                 setAdminPassword(e.target.value);
