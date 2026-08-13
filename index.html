@@ -46,16 +46,18 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCEqqlQ5v7muBfcrePVjc6e0wcS7Ihr3YI",
-            authDomain: "agency-b8e1d.firebaseapp.com",
-            projectId: "agency-b8e1d",
-            storageBucket: "agency-b8e1d.firebasestorage.app",
-            messagingSenderId: "1085196717304",
-            appId: "1:1085196717304:web:91c88184bd5ae64b9fbf0d",
-            measurementId: "G-0J928RY0HN"
-        };
+        // Dynamic or fallback Firebase configuration
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config)
+            : {
+                apiKey: "AIzaSyCEqqlQ5v7muBfcrePVjc6e0wcS7Ihr3YI",
+                authDomain: "agency-b8e1d.firebaseapp.com",
+                projectId: "agency-b8e1d",
+                storageBucket: "agency-b8e1d.firebasestorage.app",
+                messagingSenderId: "1085196717304",
+                appId: "1:1085196717304:web:91c88184bd5ae64b9fbf0d",
+                measurementId: "G-0J928RY0HN"
+            };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -99,12 +101,32 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // Utility to fix & convert common cloud image links (Google Drive, Dropbox) into direct image URLs
+        const formatImageUrl = (url) => {
+            if (!url) return '';
+            let cleaned = url.trim();
+
+            // Convert Google Drive view links to direct image content URLs
+            if (cleaned.includes('drive.google.com')) {
+                const match = cleaned.match(/\/d\/([a-zA-Z0-9_-]+)/) || cleaned.match(/id=([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    return `https://lh3.googleusercontent.com/d/${match[1]}`;
+                }
+            }
+
+            // Convert Dropbox share links to raw direct image links
+            if (cleaned.includes('dropbox.com')) {
+                return cleaned.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace('?dl=0', '');
+            }
+
+            return cleaned;
+        };
+
         const { useState, useEffect, useRef } = React;
 
         // Firebase Fallback logic
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'aura-talent-agency';
         
-        // Initial Seed Mock Data
         const INITIAL_INFLUENCERS = [
             {
                 id: 'inf-1',
@@ -113,6 +135,12 @@
                 category: 'Beauty & Lifestyle',
                 avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=600',
                 followers: { tiktok: '1.2M', instagram: '450K', youtube: '280K' },
+                socialLinks: {
+                    tiktok: 'https://www.tiktok.com/@ploy_napas',
+                    instagram: 'https://www.instagram.com/ploy_napas',
+                    youtube: 'https://www.youtube.com',
+                    facebook: ''
+                },
                 bio: 'คอนเทนต์ครีเอเตอร์สายบิวตี้ แฟชั่น และไลฟ์สไตล์เน้นความมินิมอล เข้าถึงง่าย Real-user review',
                 contactEmail: 'contact.ploynapas@gmail.com',
                 contactPhone: '081-234-5678',
@@ -137,6 +165,12 @@
                 category: 'Tech & Gadget',
                 avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=600',
                 followers: { tiktok: '850K', youtube: '520K', facebook: '310K' },
+                socialLinks: {
+                    tiktok: 'https://www.tiktok.com',
+                    instagram: '',
+                    youtube: 'https://www.youtube.com',
+                    facebook: 'https://www.facebook.com'
+                },
                 bio: 'เจาะลึกเทคโนโลยี สมาร์ทโฟน สินค้า IT และ Gadget ประจำวัน รีวิวตรงไปตรงมาเข้าใจง่าย',
                 contactEmail: 'work.maxtech@gmail.com',
                 contactPhone: '089-987-6543',
@@ -158,6 +192,12 @@
                 category: 'Food & Travel',
                 avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=600',
                 followers: { tiktok: '2.1M', instagram: '680K' },
+                socialLinks: {
+                    tiktok: 'https://www.tiktok.com',
+                    instagram: 'https://www.instagram.com',
+                    youtube: '',
+                    facebook: ''
+                },
                 bio: 'พาเช็คอินคาเฟ่ฮิต ร้านอาหารเด็ด สายกินสายเดินทาง ห้ามพลาด!',
                 contactEmail: 'aomsin.booking@gmail.com',
                 contactPhone: '082-111-2233',
@@ -184,12 +224,17 @@
             const [isAdmin, setIsAdmin] = useState(false);
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [adminPassword, setAdminPassword] = useState('');
+            const [adminLoginError, setAdminLoginError] = useState('');
             const [showAddEditModal, setShowAddEditModal] = useState(false);
             const [editingInfluencer, setEditingInfluencer] = useState(null);
+
+            // Secret Logo Double-Click Hint counter
+            const [logoClickCount, setLogoClickCount] = useState(0);
 
             // Firebase & Sync States
             const [fbReady, setFbReady] = useState(!!window.FirebaseAPI);
             const [currentUser, setCurrentUser] = useState(null);
+            const [fbStatus, setFbStatus] = useState({ connected: false, error: null });
 
             // Chat States
             const [showChatModal, setShowChatModal] = useState(false);
@@ -237,8 +282,15 @@
                         } else if (!auth.currentUser) {
                             await signInAnonymously(auth);
                         }
+                        setFbStatus({ connected: true, error: null });
                     } catch (err) {
                         console.error('Firebase Auth Error:', err);
+                        setFbStatus({ 
+                            connected: false, 
+                            error: err.code === 'auth/operation-not-allowed' 
+                                ? 'ยังไม่ได้เปิดใช้งาน Anonymous Auth ใน Firebase Console' 
+                                : err.message 
+                        });
                     }
                 };
 
@@ -246,6 +298,9 @@
 
                 const unsubscribe = onAuthStateChanged(auth, (user) => {
                     setCurrentUser(user);
+                    if (user) {
+                        setFbStatus({ connected: true, error: null });
+                    }
                 });
 
                 return () => unsubscribe();
@@ -253,8 +308,7 @@
 
             // Sync Influencers & Chats from Firestore
             useEffect(() => {
-                if (!fbReady || !currentUser) {
-                    // Fallback local storage
+                if (!fbReady) {
                     const savedInf = localStorage.getItem('aura_influencers');
                     if (savedInf) setInfluencers(JSON.parse(savedInf));
                     else setInfluencers(INITIAL_INFLUENCERS);
@@ -270,8 +324,8 @@
                 // 1. Subscribe to Influencers
                 const infColRef = collection(db, 'artifacts', activeAppId, 'public', 'data', 'influencers');
                 const unsubscribeInf = onSnapshot(infColRef, (snapshot) => {
+                    setFbStatus(prev => ({ ...prev, connected: true }));
                     if (snapshot.empty) {
-                        // Seed initial influencers into Firestore if empty
                         INITIAL_INFLUENCERS.forEach(async (inf) => {
                             try {
                                 await setDoc(doc(db, 'artifacts', activeAppId, 'public', 'data', 'influencers', inf.id), inf);
@@ -286,6 +340,13 @@
                     }
                 }, (error) => {
                     console.error('Firestore Influencers snapshot error:', error);
+                    setFbStatus(prev => ({ 
+                        ...prev, 
+                        error: prev.error || 'ไม่สามารถดึงข้อมูลจาก Firestore: ' + error.message 
+                    }));
+                    const savedInf = localStorage.getItem('aura_influencers');
+                    if (savedInf) setInfluencers(JSON.parse(savedInf));
+                    else setInfluencers(INITIAL_INFLUENCERS);
                 });
 
                 // 2. Subscribe to Chats
@@ -309,13 +370,15 @@
                     }
                 }, (error) => {
                     console.error('Firestore Chats snapshot error:', error);
+                    const savedChats = localStorage.getItem('aura_chat_messages');
+                    if (savedChats) setAllChats(JSON.parse(savedChats));
                 });
 
                 return () => {
                     unsubscribeInf();
                     unsubscribeChats();
                 };
-            }, [fbReady, currentUser]);
+            }, [fbReady]);
 
             // Save Chats & Influencers to localStorage backup
             useEffect(() => {
@@ -337,15 +400,27 @@
                 }
             }, [allChats, showChatModal, selectedAdminThread]);
 
+            const handleLogoDoubleClick = () => {
+                if (!isAdmin) {
+                    setAdminLoginError('');
+                    setAdminPassword('');
+                    setShowAdminLogin(true);
+                    showToast('เปิดหน้าเข้าสู่ระบบ Admin', 'info');
+                }
+            };
+
             const handleAdminLogin = (e) => {
                 e.preventDefault();
+                setAdminLoginError('');
+                
                 if (adminPassword === 'admin' || adminPassword === '1234') {
                     setIsAdmin(true);
                     setShowAdminLogin(false);
                     setAdminPassword('');
+                    setAdminLoginError('');
                     showToast('เข้าสู่ระบบสำหรับ Admin เรียบร้อยแล้ว');
                 } else {
-                    showToast('รหัสผ่าน Admin ไม่ถูกต้อง (ลองใช้: admin)', 'error');
+                    setAdminLoginError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง (รหัสผ่านเริ่มต้น: admin)');
                 }
             };
 
@@ -366,9 +441,16 @@
 
             const handleSaveInfluencer = async (formData) => {
                 const targetId = formData.id || ('inf-' + Date.now());
-                const updatedData = { ...formData, id: targetId };
+                
+                // Format all Image URLs automatically
+                const updatedData = { 
+                    ...formData, 
+                    id: targetId,
+                    avatar: formatImageUrl(formData.avatar),
+                    gallery: (formData.gallery || []).map(g => ({ ...g, url: formatImageUrl(g.url) }))
+                };
 
-                if (fbReady && currentUser) {
+                if (fbReady) {
                     const { db, doc, setDoc } = window.FirebaseAPI;
                     const activeAppId = typeof __app_id !== 'undefined' ? __app_id : 'agency-b8e1d';
                     try {
@@ -391,7 +473,7 @@
 
             const handleDeleteInfluencer = async (id) => {
                 if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบ Influencer รายนี้?')) {
-                    if (fbReady && currentUser) {
+                    if (fbReady) {
                         const { db, doc, deleteDoc } = window.FirebaseAPI;
                         const activeAppId = typeof __app_id !== 'undefined' ? __app_id : 'agency-b8e1d';
                         try {
@@ -418,7 +500,7 @@
                     createdAt: Date.now()
                 };
 
-                if (fbReady && currentUser) {
+                if (fbReady) {
                     const { db, doc, setDoc } = window.FirebaseAPI;
                     const activeAppId = typeof __app_id !== 'undefined' ? __app_id : 'agency-b8e1d';
                     try {
@@ -454,11 +536,17 @@
                         </div>
                     )}
 
+                    {}
                     <header className="sticky top-0 z-30 glass-panel border-b border-slate-200/80">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-                            {/* Logo */}
-                            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedCategory('All')}>
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+                            {/* Logo with Secret Double Click to Open Admin Login */}
+                            <div 
+                                className="flex items-center gap-3 cursor-pointer select-none group" 
+                                onDoubleClick={handleLogoDoubleClick}
+                                onClick={() => setSelectedCategory('All')}
+                                title="ดับเบิ้ลคลิกเพื่อเปิด Admin Login"
+                            >
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200 group-hover:scale-105 transition-transform">
                                     <i className="fa-solid fa-sparkles text-lg"></i>
                                 </div>
                                 <div>
@@ -469,7 +557,19 @@
 
                             {/* Actions & Status */}
                             <div className="flex items-center gap-3">
-                                {isAdmin ? (
+                                {/* Firebase Status Indicator */}
+                                <span 
+                                    className={`px-3 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1.5 border ${
+                                        fbStatus.connected 
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                                    }`}
+                                >
+                                    <span className={`w-2 h-2 rounded-full ${fbStatus.connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                                    {fbStatus.connected ? 'Firebase Online' : 'Offline / Local'}
+                                </span>
+
+                                {isAdmin && (
                                     <div className="flex items-center gap-2">
                                         <span className="px-3 py-1 bg-amber-100 text-amber-800 text-xs font-semibold rounded-full border border-amber-200 flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
@@ -490,14 +590,6 @@
                                             <i className="fa-solid fa-arrow-right-from-bracket text-lg"></i>
                                         </button>
                                     </div>
-                                ) : (
-                                    <button 
-                                        onClick={() => setShowAdminLogin(true)}
-                                        className="text-xs text-slate-500 hover:text-indigo-600 px-3 py-2 rounded-lg transition-all flex items-center gap-1.5"
-                                    >
-                                        <i className="fa-solid fa-lock"></i>
-                                        Admin Login
-                                    </button>
                                 )}
 
                                 {/* Floating Chat Button */}
@@ -517,7 +609,19 @@
                         </div>
                     </header>
 
+                    {}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex-1">
+                        {/* Firebase Warning Banner if Auth or Firestore has errors */}
+                        {fbStatus.error && (
+                            <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3 shadow-sm">
+                                <i className="fa-solid fa-triangle-exclamation text-amber-600 text-base mt-0.5"></i>
+                                <div className="flex-1">
+                                    <span className="font-bold block text-sm">สถานะระบบ Firebase:</span>
+                                    <p className="mt-0.5 text-amber-800">{fbStatus.error}</p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="text-center max-w-2xl mx-auto mb-10">
                             <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Exclusive Talent Network</span>
                             <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-4 tracking-tight leading-tight">
@@ -578,8 +682,9 @@
                                         {/* Avatar & Cover Header */}
                                         <div className="relative h-48 bg-gradient-to-tr from-slate-800 to-indigo-950 overflow-hidden">
                                             <img 
-                                                src={inf.avatar} 
+                                                src={formatImageUrl(inf.avatar)} 
                                                 alt={inf.name}
+                                                referrerPolicy="no-referrer"
                                                 className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
                                                 onError={(e) => { e.target.src = 'https://placehold.co/600x400/e2e8f0/475569?text=AURA+Talent'; }}
                                             />
@@ -619,20 +724,49 @@
                                         {/* Stats & Info Content */}
                                         <div className="p-5 flex-1 flex flex-col justify-between">
                                             <div>
-                                                {/* Followers Counter */}
+                                                {/* Followers Counter & Social Links */}
                                                 <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center mb-4 border border-slate-100">
-                                                    <div>
-                                                        <span className="block text-[10px] text-slate-400 font-medium">TikTok</span>
-                                                        <span className="text-xs font-bold text-slate-700">{inf.followers?.tiktok || '-'}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[10px] text-slate-400 font-medium">IG</span>
-                                                        <span className="text-xs font-bold text-slate-700">{inf.followers?.instagram || '-'}</span>
-                                                    </div>
-                                                    <div>
-                                                        <span className="block text-[10px] text-slate-400 font-medium">YouTube</span>
-                                                        <span className="text-xs font-bold text-slate-700">{inf.followers?.youtube || '-'}</span>
-                                                    </div>
+                                                    {inf.socialLinks?.tiktok ? (
+                                                        <a href={inf.socialLinks.tiktok} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+                                                            <span className="block text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1">
+                                                                <i className="fa-brands fa-tiktok text-slate-700"></i> TikTok
+                                                            </span>
+                                                            <span className="text-xs font-bold text-indigo-600 underline decoration-indigo-200">{inf.followers?.tiktok || '-'}</span>
+                                                        </a>
+                                                    ) : (
+                                                        <div>
+                                                            <span className="block text-[10px] text-slate-400 font-medium">TikTok</span>
+                                                            <span className="text-xs font-bold text-slate-700">{inf.followers?.tiktok || '-'}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {inf.socialLinks?.instagram ? (
+                                                        <a href={inf.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+                                                            <span className="block text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1">
+                                                                <i className="fa-brands fa-instagram text-pink-600"></i> IG
+                                                            </span>
+                                                            <span className="text-xs font-bold text-indigo-600 underline decoration-indigo-200">{inf.followers?.instagram || '-'}</span>
+                                                        </a>
+                                                    ) : (
+                                                        <div>
+                                                            <span className="block text-[10px] text-slate-400 font-medium">IG</span>
+                                                            <span className="text-xs font-bold text-slate-700">{inf.followers?.instagram || '-'}</span>
+                                                        </div>
+                                                    )}
+
+                                                    {inf.socialLinks?.youtube ? (
+                                                        <a href={inf.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+                                                            <span className="block text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1">
+                                                                <i className="fa-brands fa-youtube text-red-600"></i> YouTube
+                                                            </span>
+                                                            <span className="text-xs font-bold text-indigo-600 underline decoration-indigo-200">{inf.followers?.youtube || '-'}</span>
+                                                        </a>
+                                                    ) : (
+                                                        <div>
+                                                            <span className="block text-[10px] text-slate-400 font-medium">YouTube</span>
+                                                            <span className="text-xs font-bold text-slate-700">{inf.followers?.youtube || '-'}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed mb-4">
@@ -663,6 +797,19 @@
                         )}
                     </main>
 
+                    {/* Footer with Discreet Admin Trigger */}
+                    <footer className="text-center py-6 text-xs text-slate-400 border-t border-slate-200/60 mt-auto">
+                        <p>© 2026 AURA Talent Agency. All rights reserved.</p>
+                        <button 
+                            onClick={handleLogoDoubleClick}
+                            className="text-slate-300 hover:text-slate-400 mt-1 text-[10px] transition-colors"
+                            title="Admin Portal"
+                        >
+                            •
+                        </button>
+                    </footer>
+
+                    {}
                     {activeInfluencer && (
                         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
                             <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -675,8 +822,9 @@
                                         <i className="fa-solid fa-xmark"></i>
                                     </button>
                                     <img 
-                                        src={activeInfluencer.avatar} 
+                                        src={formatImageUrl(activeInfluencer.avatar)} 
                                         alt={activeInfluencer.name}
+                                        referrerPolicy="no-referrer"
                                         className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-400/30"
                                     />
                                     <div>
@@ -690,6 +838,32 @@
 
                                 {/* Modal Body (Scrollable) */}
                                 <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+                                    {/* Social Profile Links Buttons */}
+                                    {activeInfluencer.socialLinks && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {activeInfluencer.socialLinks.tiktok && (
+                                                <a href={activeInfluencer.socialLinks.tiktok} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium flex items-center gap-2 transition-all">
+                                                    <i className="fa-brands fa-tiktok"></i> TikTok Profile
+                                                </a>
+                                            )}
+                                            {activeInfluencer.socialLinks.instagram && (
+                                                <a href={activeInfluencer.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-medium flex items-center gap-2 transition-all">
+                                                    <i className="fa-brands fa-instagram"></i> Instagram Profile
+                                                </a>
+                                            )}
+                                            {activeInfluencer.socialLinks.youtube && (
+                                                <a href={activeInfluencer.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-medium flex items-center gap-2 transition-all">
+                                                    <i className="fa-brands fa-youtube"></i> YouTube Channel
+                                                </a>
+                                            )}
+                                            {activeInfluencer.socialLinks.facebook && (
+                                                <a href={activeInfluencer.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium flex items-center gap-2 transition-all">
+                                                    <i className="fa-brands fa-facebook"></i> Facebook Page
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* Bio */}
                                     <div>
                                         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">ข้อมูลแนะนำตัว</h4>
@@ -750,8 +924,9 @@
                                                     >
                                                         <div className="aspect-[4/3] w-full overflow-hidden bg-slate-900">
                                                             <img 
-                                                                src={item.url} 
+                                                                src={formatImageUrl(item.url)} 
                                                                 alt={item.title || 'Rate Card'} 
+                                                                referrerPolicy="no-referrer"
                                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-95 group-hover:opacity-100"
                                                                 onError={(e) => { e.target.src = 'https://placehold.co/800x600/1e1b4b/ffffff?text=Rate+Card+Image'; }}
                                                             />
@@ -771,19 +946,6 @@
                                             <div className="p-6 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                                                 <i className="fa-regular fa-image text-slate-300 text-2xl mb-2 block"></i>
                                                 <p className="text-xs text-slate-400">ยังไม่มีรูปภาพรายละเอียดหรือเรทการ์ด</p>
-                                                {isAdmin && (
-                                                    <button 
-                                                        onClick={() => {
-                                                            const targetInf = activeInfluencer;
-                                                            setActiveInfluencer(null);
-                                                            setEditingInfluencer(targetInf);
-                                                            setShowAddEditModal(true);
-                                                        }}
-                                                        className="mt-2 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
-                                                    >
-                                                        + เพิ่มรูปภาพเรทการ์ด
-                                                    </button>
-                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -840,16 +1002,35 @@
                         </div>
                     )}
 
+                    {}
                     {showAdminLogin && (
                         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                            <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 relative">
+                                <button 
+                                    onClick={() => setShowAdminLogin(false)} 
+                                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1"
+                                >
+                                    <i className="fa-solid fa-xmark text-lg"></i>
+                                </button>
                                 <div className="text-center mb-6">
                                     <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3 text-xl">
                                         <i className="fa-solid fa-user-shield"></i>
                                     </div>
-                                    <h3 className="text-lg font-bold text-slate-900">Admin Login</h3>
-                                    <p className="text-xs text-slate-500 mt-1">เข้าสู่ระบบเพื่อจัดการข้อมูล Influencer และเรทราคา</p>
+                                    <h3 className="text-lg font-bold text-slate-900">Admin Authentication</h3>
+                                    <p className="text-xs text-slate-500 mt-1">เข้าสู่ระบบผู้ดูแลระบบ AURA Talent</p>
                                 </div>
+
+                                {/* In-Modal Error Pop-up Banner */}
+                                {adminLoginError && (
+                                    <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 animate-shake">
+                                        <i className="fa-solid fa-circle-exclamation text-rose-500 text-sm mt-0.5 flex-shrink-0"></i>
+                                        <div className="flex-1 leading-snug">
+                                            <strong>การเข้าสู่ระบบล้มเหลว</strong>
+                                            <p className="mt-0.5 text-rose-600">{adminLoginError}</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <form onSubmit={handleAdminLogin} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-medium text-slate-700 mb-1">รหัสผ่านสำหรับ Admin</label>
@@ -857,8 +1038,12 @@
                                             type="password"
                                             placeholder="ใส่รหัสผ่าน (ทดสอบใช้: admin)"
                                             value={adminPassword}
-                                            onChange={(e) => setAdminPassword(e.target.value)}
+                                            onChange={(e) => {
+                                                setAdminPassword(e.target.value);
+                                                setAdminLoginError('');
+                                            }}
                                             className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                            autoFocus
                                             required
                                         />
                                     </div>
@@ -902,8 +1087,9 @@
                                     <i className="fa-solid fa-xmark text-sm"></i> ปิดหน้านี้
                                 </button>
                                 <img 
-                                    src={viewImage.url} 
+                                    src={formatImageUrl(viewImage.url)} 
                                     alt={viewImage.title}
+                                    referrerPolicy="no-referrer"
                                     className="max-h-[80vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
                                 />
                                 {viewImage.title && (
@@ -915,6 +1101,7 @@
                         </div>
                     )}
 
+                    {}
                     {showChatModal && (
                         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
                             <div className="bg-white rounded-3xl max-w-xl w-full h-[600px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -1017,7 +1204,11 @@
 
         function AdminEditModal({ influencer, categories, onClose, onSave }) {
             const [formData, setFormData] = useState(() => {
-                if (influencer) return { gallery: [], ...influencer };
+                if (influencer) return { 
+                    gallery: [], 
+                    socialLinks: { tiktok: '', instagram: '', youtube: '', facebook: '' },
+                    ...influencer 
+                };
                 return {
                     name: '',
                     handle: '',
@@ -1025,6 +1216,7 @@
                     avatar: '',
                     bio: '',
                     followers: { tiktok: '', instagram: '', youtube: '' },
+                    socialLinks: { tiktok: '', instagram: '', youtube: '', facebook: '' },
                     contactEmail: '',
                     contactPhone: '',
                     scopes: [{ id: 's-1', name: 'TikTok Clip (60s)', price: 15000, note: '' }],
@@ -1153,9 +1345,24 @@
                                         type="text" 
                                         value={formData.avatar} 
                                         onChange={e => setFormData({...formData, avatar: e.target.value})}
-                                        placeholder="https://..."
+                                        placeholder="https://images.unsplash.com/... หรือ Google Drive"
                                         className="w-full px-3 py-2 border border-slate-200 rounded-xl" 
                                     />
+                                    {/* Avatar Preview */}
+                                    {formData.avatar && (
+                                        <div className="mt-2 flex items-center gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
+                                            <img 
+                                                src={formatImageUrl(formData.avatar)} 
+                                                alt="Preview Avatar" 
+                                                referrerPolicy="no-referrer"
+                                                className="w-10 h-10 rounded-lg object-cover border border-slate-300"
+                                                onError={(e) => { e.target.src = 'https://placehold.co/100?text=Error'; }}
+                                            />
+                                            <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+                                                <i className="fa-solid fa-check-circle"></i> ตรวจสอบพรีวิวรูปภาพ
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -1167,6 +1374,49 @@
                                     onChange={e => setFormData({...formData, bio: e.target.value})}
                                     className="w-full px-3 py-2 border border-slate-200 rounded-xl"
                                 ></textarea>
+                            </div>
+
+                            {/* Social Profile Links Section */}
+                            <div className="p-3 bg-indigo-50/60 rounded-2xl border border-indigo-100">
+                                <span className="font-bold text-indigo-900 block mb-2">ลิงก์โปรไฟล์โซเชียลมีเดีย (Social Profiles)</span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-600 mb-1"><i className="fa-brands fa-tiktok text-slate-800 mr-1"></i> TikTok Profile URL</label>
+                                        <input 
+                                            placeholder="https://www.tiktok.com/@..."
+                                            value={formData.socialLinks?.tiktok || ''}
+                                            onChange={e => setFormData({...formData, socialLinks: {...formData.socialLinks, tiktok: e.target.value}})}
+                                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-600 mb-1"><i className="fa-brands fa-instagram text-pink-600 mr-1"></i> Instagram Profile URL</label>
+                                        <input 
+                                            placeholder="https://www.instagram.com/..."
+                                            value={formData.socialLinks?.instagram || ''}
+                                            onChange={e => setFormData({...formData, socialLinks: {...formData.socialLinks, instagram: e.target.value}})}
+                                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-600 mb-1"><i className="fa-brands fa-youtube text-red-600 mr-1"></i> YouTube Channel URL</label>
+                                        <input 
+                                            placeholder="https://www.youtube.com/@..."
+                                            value={formData.socialLinks?.youtube || ''}
+                                            onChange={e => setFormData({...formData, socialLinks: {...formData.socialLinks, youtube: e.target.value}})}
+                                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl bg-white"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-medium text-slate-600 mb-1"><i className="fa-brands fa-facebook text-blue-600 mr-1"></i> Facebook Page URL</label>
+                                        <input 
+                                            placeholder="https://www.facebook.com/..."
+                                            value={formData.socialLinks?.facebook || ''}
+                                            onChange={e => setFormData({...formData, socialLinks: {...formData.socialLinks, facebook: e.target.value}})}
+                                            className="w-full px-3 py-1.5 border border-slate-200 rounded-xl bg-white"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Followers */}
@@ -1237,11 +1487,14 @@
                             {/* Gallery & Rate Card Images Management Section */}
                             <div>
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="font-bold text-slate-700">รูปภาพรายละเอียด / เรทการ์ด (Gallery Images)</span>
+                                    <div>
+                                        <span className="font-bold text-slate-700 block">รูปภาพรายละเอียด / เรทการ์ด (Gallery Images)</span>
+                                        <span className="text-[10px] text-slate-400">💡 นำลิงก์จาก Unsplash, Imgur หรือ Google Drive มาวางได้เลย ระบบจะแปลงให้เปิดดูได้ทันที</span>
+                                    </div>
                                     <button 
                                         type="button" 
                                         onClick={handleAddGalleryImage}
-                                        className="text-indigo-600 font-semibold hover:underline"
+                                        className="text-indigo-600 font-semibold hover:underline flex-shrink-0"
                                     >
                                         + เพิ่มรูปภาพเรทการ์ด
                                     </button>
@@ -1250,10 +1503,15 @@
                                     {formData.gallery && formData.gallery.length > 0 ? (
                                         formData.gallery.map((item, index) => (
                                             <div key={item.id || index} className="flex items-start gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                                                {/* Image Thumbnail Preview */}
+                                                {/* Image Thumbnail Live Preview */}
                                                 <div className="w-12 h-12 bg-slate-200 rounded-lg overflow-hidden flex-shrink-0 border border-slate-300">
                                                     {item.url ? (
-                                                        <img src={item.url} className="w-full h-full object-cover" onError={(e) => { e.target.src = 'https://placehold.co/100?text=Error'; }} />
+                                                        <img 
+                                                            src={formatImageUrl(item.url)} 
+                                                            referrerPolicy="no-referrer"
+                                                            className="w-full h-full object-cover" 
+                                                            onError={(e) => { e.target.src = 'https://placehold.co/100?text=Error'; }} 
+                                                        />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
                                                             <i className="fa-regular fa-image"></i>
