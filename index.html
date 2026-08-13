@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AURA Talent - Influencer Portfolio Management</title>
+    <title>Haung Ting Ming - Influencer Portfolio Management</title>
 
     <!-- Google Fonts & Tailwind CSS -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -125,7 +125,7 @@
         const { useState, useEffect, useRef } = React;
 
         // Firebase Fallback logic
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'aura-talent-agency';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'Haung Ting Ming-talent-agency';
         
         const INITIAL_INFLUENCERS = [
             {
@@ -239,10 +239,10 @@
             // Chat States
             const [showChatModal, setShowChatModal] = useState(false);
             const [visitorId] = useState(() => {
-                let id = localStorage.getItem('aura_visitor_id');
+                let id = localStorage.getItem('Haung Ting Ming_visitor_id');
                 if (!id) {
                     id = 'user_' + Math.random().toString(36).substring(2, 9);
-                    localStorage.setItem('aura_visitor_id', id);
+                    localStorage.setItem('Haung Ting Ming_visitor_id', id);
                 }
                 return id;
             });
@@ -309,11 +309,11 @@
             // Sync Influencers & Chats from Firestore
             useEffect(() => {
                 if (!fbReady) {
-                    const savedInf = localStorage.getItem('aura_influencers');
+                    const savedInf = localStorage.getItem('Haung Ting Ming_influencers');
                     if (savedInf) setInfluencers(JSON.parse(savedInf));
                     else setInfluencers(INITIAL_INFLUENCERS);
 
-                    const savedChats = localStorage.getItem('aura_chat_messages');
+                    const savedChats = localStorage.getItem('Haung Ting Ming_chat_messages');
                     if (savedChats) setAllChats(JSON.parse(savedChats));
                     return;
                 }
@@ -336,7 +336,7 @@
                     } else {
                         const list = snapshot.docs.map(d => d.data());
                         setInfluencers(list);
-                        localStorage.setItem('aura_influencers', JSON.stringify(list));
+                        localStorage.setItem('Haung Ting Ming_influencers', JSON.stringify(list));
                     }
                 }, (error) => {
                     console.error('Firestore Influencers snapshot error:', error);
@@ -344,7 +344,7 @@
                         ...prev, 
                         error: prev.error || 'ไม่สามารถดึงข้อมูลจาก Firestore: ' + error.message 
                     }));
-                    const savedInf = localStorage.getItem('aura_influencers');
+                    const savedInf = localStorage.getItem('Haung Ting Ming_influencers');
                     if (savedInf) setInfluencers(JSON.parse(savedInf));
                     else setInfluencers(INITIAL_INFLUENCERS);
                 });
@@ -357,7 +357,7 @@
                             id: 'msg-1',
                             visitorId: visitorId,
                             sender: 'admin',
-                            text: 'สวัสดีครับ! ยินดีต้อนรับสู่ AURA Talent หากต้องการสอบถามคิวงาน หรือขอเรทการ์ดเพิ่มเติม ทักแชทไว้ได้เลยครับ',
+                            text: 'สวัสดีครับ! ยินดีต้อนรับสู่ Haung Ting Ming หากต้องการสอบถามคิวงาน หรือขอเรทการ์ดเพิ่มเติม ทักแชทไว้ได้เลยครับ',
                             timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
                             createdAt: Date.now()
                         };
@@ -366,11 +366,11 @@
                         const list = snapshot.docs.map(d => d.data());
                         list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
                         setAllChats(list);
-                        localStorage.setItem('aura_chat_messages', JSON.stringify(list));
+                        localStorage.setItem('Haung Ting Ming_chat_messages', JSON.stringify(list));
                     }
                 }, (error) => {
                     console.error('Firestore Chats snapshot error:', error);
-                    const savedChats = localStorage.getItem('aura_chat_messages');
+                    const savedChats = localStorage.getItem('Haung Ting Ming_chat_messages');
                     if (savedChats) setAllChats(JSON.parse(savedChats));
                 });
 
@@ -383,13 +383,13 @@
             // Save Chats & Influencers to localStorage backup
             useEffect(() => {
                 if (influencers.length > 0) {
-                    localStorage.setItem('aura_influencers', JSON.stringify(influencers));
+                    localStorage.setItem('Haung Ting Ming_influencers', JSON.stringify(influencers));
                 }
             }, [influencers]);
 
             useEffect(() => {
                 if (allChats.length > 0) {
-                    localStorage.setItem('aura_chat_messages', JSON.stringify(allChats));
+                    localStorage.setItem('Haung Ting Ming_chat_messages', JSON.stringify(allChats));
                 }
             }, [allChats]);
 
@@ -413,14 +413,14 @@
                 e.preventDefault();
                 setAdminLoginError('');
                 
-                if (adminPassword === 'admin' || adminPassword === '1234') {
+                if (adminPassword === 'Pack' || adminPassword === '1234') {
                     setIsAdmin(true);
                     setShowAdminLogin(false);
                     setAdminPassword('');
                     setAdminLoginError('');
                     showToast('เข้าสู่ระบบสำหรับ Admin เรียบร้อยแล้ว');
                 } else {
-                    setAdminLoginError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง (รหัสผ่านเริ่มต้น: admin)');
+                    setAdminLoginError('รหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง');
                 }
             };
 
@@ -550,7 +550,7 @@
                                     <i className="fa-solid fa-sparkles text-lg"></i>
                                 </div>
                                 <div>
-                                    <span className="text-xl font-bold tracking-tight text-slate-900 block leading-none">AURA <span className="text-indigo-600">TALENT</span></span>
+                                    <span className="text-xl font-bold tracking-tight text-slate-900 block leading-none">Haung Ting Ming <span className="text-indigo-600">TALENT</span></span>
                                     <span className="text-xs text-slate-500 tracking-wider">INFLUENCER AGENCY</span>
                                 </div>
                             </div>
@@ -686,7 +686,7 @@
                                                 alt={inf.name}
                                                 referrerPolicy="no-referrer"
                                                 className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-500"
-                                                onError={(e) => { e.target.src = 'https://placehold.co/600x400/e2e8f0/475569?text=AURA+Talent'; }}
+                                                onError={(e) => { e.target.src = 'https://placehold.co/600x400/e2e8f0/475569?text=Haung Ting Ming+Talent'; }}
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent"></div>
                                             
@@ -799,7 +799,7 @@
 
                     {/* Footer with Discreet Admin Trigger */}
                     <footer className="text-center py-6 text-xs text-slate-400 border-t border-slate-200/60 mt-auto">
-                        <p>© 2026 AURA Talent Agency. All rights reserved.</p>
+                        <p>© 2026 Haung Ting Ming Agency. All rights reserved.</p>
                         <button 
                             onClick={handleLogoDoubleClick}
                             className="text-slate-300 hover:text-slate-400 mt-1 text-[10px] transition-colors"
@@ -1017,7 +1017,7 @@
                                         <i className="fa-solid fa-user-shield"></i>
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-900">Admin Authentication</h3>
-                                    <p className="text-xs text-slate-500 mt-1">เข้าสู่ระบบผู้ดูแลระบบ AURA Talent</p>
+                                    <p className="text-xs text-slate-500 mt-1">เข้าสู่ระบบผู้ดูแลระบบ</p>
                                 </div>
 
                                 {/* In-Modal Error Pop-up Banner */}
@@ -1036,7 +1036,7 @@
                                         <label className="block text-xs font-medium text-slate-700 mb-1">รหัสผ่านสำหรับ Admin</label>
                                         <input 
                                             type="password"
-                                            placeholder="ใส่รหัสผ่าน (ทดสอบใช้: admin)"
+                                            placeholder="ใส่รหัสผ่าน..."
                                             value={adminPassword}
                                             onChange={(e) => {
                                                 setAdminPassword(e.target.value);
