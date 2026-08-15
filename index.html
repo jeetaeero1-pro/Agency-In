@@ -177,9 +177,7 @@
             const [allChats, setAllChats] = useState([]);
             const [newMessageText, setNewMessageText] = useState('');
             const [selectedAdminThread, setSelectedAdminThread] = useState(null);
-            const [readThreads, setReadThreads] = useState({}); // Track read status per thread for admin
             const chatEndRef = useRef(null);
-            const chatFileInputRef = useRef(null);
 
             // Notification / Alert Toast
             const [toast, setToast] = useState(null);
@@ -338,17 +336,6 @@
                 }
             }, [allChats, showChatModal, selectedAdminThread]);
 
-            // Mark thread as read when selected
-            useEffect(() => {
-                if (selectedAdminThread) {
-                    const threadMsgs = allChats.filter(m => m.visitorId === selectedAdminThread);
-                    const lastMsg = threadMsgs[threadMsgs.length - 1];
-                    if (lastMsg) {
-                        setReadThreads(prev => ({ ...prev, [selectedAdminThread]: lastMsg.id }));
-                    }
-                }
-            }, [selectedAdminThread, allChats]);
-
             const handleLogoDoubleClick = () => {
                 if (!isAdmin) {
                     setAdminLoginError('');
@@ -437,8 +424,8 @@
                 }
             };
 
-            const handleSendMessage = async (targetVisitorId = visitorId, imageUrl = null) => {
-                if (!newMessageText.trim() && !imageUrl) return;
+            const handleSendMessage = async (targetVisitorId = visitorId) => {
+                if (!newMessageText.trim()) return;
 
                 const messageId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
                 const newMsg = {
@@ -446,7 +433,6 @@
                     visitorId: isAdmin ? targetVisitorId : visitorId,
                     sender: isAdmin ? 'admin' : 'user',
                     text: newMessageText.trim(),
-                    image: imageUrl || null,
                     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     createdAt: Date.now()
                 };
@@ -458,86 +444,31 @@
                     const activeAppId = typeof __app_id !== 'undefined' ? __app_id : 'agency-b8e1d';
                     try {
                         await setDoc(doc(db, 'artifacts', activeAppId, 'public', 'data', 'chats', newMsg.id), newMsg);
+                        // Firestore snapshot listener will update `allChats` cleanly
                         return;
                     } catch (e) {
                         console.error('Error sending message to Firestore:', e);
                     }
                 }
 
-                // Fallback local update
+                // Fallback local update with deduplication check
                 setAllChats(prev => {
                     if (prev.some(m => m.id === newMsg.id)) return prev;
                     return [...prev, newMsg];
                 });
             };
 
-            // Image Upload Handler for Chat
-            const handleImageUpload = (e, targetVisitorId) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (!file.type.startsWith('image/')) {
-                    showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'error');
-                    return;
-                }
-
-                if (file.size > 5 * 1024 * 1024) {
-                    showToast('ขนาดรูปภาพต้องไม่เกิน 5MB', 'error');
-                    return;
-                }
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    handleSendMessage(targetVisitorId, event.target.result);
-                };
-                reader.readAsDataURL(file);
-                e.target.value = '';
-            };
-
-            // Delete Entire Chat Thread for Admin
-            const handleDeleteThread = async (vId, e) => {
-                e.stopPropagation();
-                if (!window.confirm(`คุณต้องการลบกล่องข้อความของ ${vId} ใช่หรือไม่?`)) return;
-
-                const msgsToDelete = allChats.filter(m => m.visitorId === vId);
-
-                if (fbReady) {
-                    const { db, doc, deleteDoc } = window.FirebaseAPI;
-                    const activeAppId = typeof __app_id !== 'undefined' ? __app_id : 'agency-b8e1d';
-                    try {
-                        for (const msg of msgsToDelete) {
-                            await deleteDoc(doc(db, 'artifacts', activeAppId, 'public', 'data', 'chats', msg.id));
-                        }
-                    } catch (err) {
-                        console.error('Error deleting thread from Firestore:', err);
-                    }
-                }
-
-                setAllChats(prev => prev.filter(m => m.visitorId !== vId));
-                if (selectedAdminThread === vId) {
-                    setSelectedAdminThread(null);
-                }
-                showToast(`ลบกล่องข้อความ ${vId} เรียบร้อยแล้ว`);
-            };
-
-            // Get chat threads for Admin - Sorted from newest to oldest
+            // Get chat threads for Admin
             const chatThreads = Array.from(new Set(allChats.map(m => m.visitorId))).map(vId => {
                 const userMsgs = allChats.filter(m => m.visitorId === vId);
                 const lastMsg = userMsgs[userMsgs.length - 1];
-                const lastReadId = readThreads[vId];
-                // Unread if last message is from user and not yet marked as read
-                const isUnread = userMsgs.some(m => m.sender === 'user') && (!lastReadId || (lastMsg && lastReadId !== lastMsg.id));
                 return {
                     visitorId: vId,
-                    lastMessage: lastMsg ? (lastMsg.image ? '📷 [รูปภาพ]' : lastMsg.text) : '',
+                    lastMessage: lastMsg ? lastMsg.text : '',
                     timestamp: lastMsg ? lastMsg.timestamp : '',
-                    createdAt: lastMsg ? (lastMsg.createdAt || 0) : 0,
-                    unread: isUnread
+                    unread: userMsgs.some(m => m.sender === 'user')
                 };
-            }).sort((a, b) => b.createdAt - a.createdAt); // Order by newest first
-
-            // Calculate unread threads count (only unread inbox threads, not total)
-            const unreadThreadsCount = chatThreads.filter(t => t.unread).length;
+            });
 
             // Deduplicate chat list before rendering
             const currentChats = Array.from(
@@ -585,15 +516,10 @@
                                 {/* Mobile Quick Chat Button */}
                                 <button 
                                     onClick={() => setShowChatModal(true)}
-                                    className="sm:hidden relative px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm"
+                                    className="sm:hidden px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm"
                                 >
                                     <i className="fa-regular fa-comment-dots text-indigo-400"></i>
                                     <span>{isAdmin ? 'แชท' : 'ติดต่อ'}</span>
-                                    {isAdmin && unreadThreadsCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                                            {unreadThreadsCount}
-                                        </span>
-                                    )}
                                 </button>
                             </div>
 
@@ -643,9 +569,9 @@
                                 >
                                     <i className="fa-regular fa-comment-dots text-indigo-400"></i>
                                     <span>{isAdmin ? 'ศูนย์รับแชท' : 'ติดต่อ Admin'}</span>
-                                    {isAdmin && unreadThreadsCount > 0 && (
+                                    {isAdmin && chatThreads.length > 0 && (
                                         <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
-                                            {unreadThreadsCount}
+                                            {chatThreads.length}
                                         </span>
                                     )}
                                 </button>
@@ -1138,8 +1064,8 @@
                                     <i className="fa-solid fa-xmark text-sm"></i> ปิด
                                 </button>
                                 <img 
-                                    src={formatImageUrl(viewImage.url || viewImage.image)} 
-                                    alt={viewImage.title || 'Image Preview'}
+                                    src={formatImageUrl(viewImage.url)} 
+                                    alt={viewImage.title}
                                     referrerPolicy="no-referrer"
                                     className="max-h-[82vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl border border-white/10"
                                 />
@@ -1155,7 +1081,7 @@
                     {/* Responsive Chat Modal */}
                     {showChatModal && (
                         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-0 sm:p-4">
-                            <div className="bg-white mobile-modal-full sm:rounded-3xl max-w-2xl w-full h-[100vh] sm:h-[600px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <div className="bg-white mobile-modal-full sm:rounded-3xl max-w-xl w-full h-[100vh] sm:h-[600px] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                                 {/* Chat Header */}
                                 <div className="p-3.5 sm:p-4 bg-slate-900 text-white flex items-center justify-between flex-shrink-0">
                                     <div className="flex items-center gap-3">
@@ -1183,116 +1109,50 @@
                                 <div className="flex-1 flex overflow-hidden">
                                     {/* If Admin, show Threads Sidebar */}
                                     {isAdmin && (
-                                        <div className="w-1/3 border-r border-slate-200 bg-slate-50 overflow-y-auto custom-scrollbar flex flex-col">
-                                            <div className="p-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
-                                                <span>กล่องข้อความ ({chatThreads.length})</span>
-                                                {unreadThreadsCount > 0 && (
-                                                    <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-bold">
-                                                        ยังไม่อ่าน {unreadThreadsCount}
-                                                    </span>
-                                                )}
+                                        <div className="w-1/3 border-r border-slate-200 bg-slate-50 overflow-y-auto custom-scrollbar">
+                                            <div className="p-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                                                ผู้ติดต่อ ({chatThreads.length})
                                             </div>
-                                            {chatThreads.length === 0 ? (
-                                                <div className="p-4 text-center text-slate-400 text-xs italic">ไม่มีข้อความเข้า</div>
-                                            ) : (
-                                                chatThreads.map(thread => (
-                                                    <div 
-                                                        key={thread.visitorId}
-                                                        onClick={() => setSelectedAdminThread(thread.visitorId)}
-                                                        className={`p-2.5 border-b border-slate-200/60 cursor-pointer transition-all relative group ${
-                                                            selectedAdminThread === thread.visitorId ? 'bg-white font-medium border-l-4 border-l-indigo-600 shadow-sm' : 'hover:bg-slate-100'
-                                                        }`}
-                                                    >
-                                                        <div className="flex items-center justify-between gap-1 mb-1">
-                                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                                <span className="text-[11px] font-bold text-slate-800 truncate">{thread.visitorId}</span>
-                                                                {thread.unread && (
-                                                                    <span className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0 animate-pulse" title="ข้อความใหม่"></span>
-                                                                )}
-                                                            </div>
-                                                            {/* Delete Thread Button */}
-                                                            <button 
-                                                                onClick={(e) => handleDeleteThread(thread.visitorId, e)}
-                                                                className="text-slate-300 hover:text-rose-500 p-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title="ลบกล่องข้อความนี้"
-                                                            >
-                                                                <i className="fa-solid fa-trash text-xs"></i>
-                                                            </button>
-                                                        </div>
-                                                        <div className="text-[10px] text-slate-500 truncate">{thread.lastMessage}</div>
-                                                        <div className="text-[9px] text-slate-400 text-right mt-1 font-mono">{thread.timestamp}</div>
-                                                    </div>
-                                                ))
-                                            )}
+                                            {chatThreads.map(thread => (
+                                                <div 
+                                                    key={thread.visitorId}
+                                                    onClick={() => setSelectedAdminThread(thread.visitorId)}
+                                                    className={`p-2.5 border-b border-slate-200/60 cursor-pointer transition-all ${
+                                                        selectedAdminThread === thread.visitorId ? 'bg-white font-medium border-l-4 border-l-indigo-600' : 'hover:bg-slate-100'
+                                                    }`}
+                                                >
+                                                    <div className="text-[11px] font-bold text-slate-800 truncate">{thread.visitorId}</div>
+                                                    <div className="text-[10px] text-slate-500 truncate">{thread.lastMessage}</div>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 
                                     {/* Messages Area */}
                                     <div className="flex-1 flex flex-col bg-slate-50/50">
                                         <div className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-3 custom-scrollbar">
-                                            {currentChats.length === 0 ? (
-                                                <div className="text-center text-slate-400 text-xs py-10">
-                                                    {isAdmin ? 'เลือกลูกค้าทางซ้ายเพื่อเริ่มสนทนา' : 'ยังไม่มีประวัติการพูดคุย พิมพ์ข้อความหรือส่งรูปภาพเพื่อสอบถามได้เลยครับ'}
-                                                </div>
-                                            ) : (
-                                                currentChats.map(msg => {
-                                                    const isMe = isAdmin ? msg.sender === 'admin' : msg.sender === 'user';
-                                                    return (
-                                                        <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                            <div className={`max-w-[85%] sm:max-w-[80%] rounded-2xl p-2.5 sm:p-3 text-xs shadow-sm ${
-                                                                isMe 
-                                                                ? 'bg-indigo-600 text-white rounded-br-none' 
-                                                                : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
-                                                            }`}>
-                                                                {/* Text Message */}
-                                                                {msg.text && (
-                                                                    <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>
-                                                                )}
-
-                                                                {/* Image Message */}
-                                                                {msg.image && (
-                                                                    <div className="mt-1">
-                                                                        <img 
-                                                                            src={msg.image} 
-                                                                            alt="Attached Image" 
-                                                                            className="max-w-full max-h-52 rounded-xl cursor-pointer border border-black/10 object-cover hover:opacity-95 transition-opacity"
-                                                                            onClick={() => setViewImage({ url: msg.image, title: 'รูปภาพจากแชท' })}
-                                                                        />
-                                                                    </div>
-                                                                )}
-
-                                                                <span className={`text-[9px] block text-right mt-1 font-mono ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                                                    {msg.timestamp}
-                                                                </span>
-                                                            </div>
+                                            {currentChats.map(msg => {
+                                                const isMe = isAdmin ? msg.sender === 'admin' : msg.sender === 'user';
+                                                return (
+                                                    <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                        <div className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 text-xs shadow-sm ${
+                                                            isMe 
+                                                            ? 'bg-indigo-600 text-white rounded-br-none' 
+                                                            : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'
+                                                        }`}>
+                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>
+                                                            <span className={`text-[9px] block text-right mt-1 font-mono ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                                                {msg.timestamp}
+                                                            </span>
                                                         </div>
-                                                    );
-                                                })
-                                            )}
+                                                    </div>
+                                                );
+                                            })}
                                             <div ref={chatEndRef} />
                                         </div>
 
                                         {/* Input Bar */}
-                                        <div className="p-2.5 sm:p-3 bg-white border-t border-slate-200 flex gap-2 items-center">
-                                            {/* Hidden Image File Input */}
-                                            <input 
-                                                type="file" 
-                                                ref={chatFileInputRef} 
-                                                accept="image/*" 
-                                                className="hidden" 
-                                                onChange={(e) => handleImageUpload(e, selectedAdminThread || visitorId)}
-                                            />
-
-                                            {/* Upload Image Button */}
-                                            <button 
-                                                type="button"
-                                                onClick={() => chatFileInputRef.current && chatFileInputRef.current.click()}
-                                                className="p-2.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex-shrink-0"
-                                                title="ส่งรูปภาพ"
-                                            >
-                                                <i className="fa-regular fa-image text-lg"></i>
-                                            </button>
-
+                                        <div className="p-2.5 sm:p-3 bg-white border-t border-slate-200 flex gap-2">
                                             <input 
                                                 type="text" 
                                                 placeholder="พิมพ์ข้อความที่นี่..." 
@@ -1303,7 +1163,7 @@
                                             />
                                             <button 
                                                 onClick={() => handleSendMessage(selectedAdminThread || visitorId)}
-                                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center flex-shrink-0"
+                                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold transition-all flex items-center justify-center"
                                             >
                                                 <i className="fa-solid fa-paper-plane"></i>
                                             </button>
@@ -1721,6 +1581,8 @@
                 </div>
             );
         }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
